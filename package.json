@@ -1,0 +1,12 @@
+{
+  "name": "fireworks-search-system",
+  "version": "1.0.0",
+  "description": "花火情報検索システム",
+  "main": "src/app.py",
+  "scripts": {
+    "start": "python src/app.py"
+  },
+  "dependencies": {
+    "python-shell": "^5.0.0"
+  }
+} 

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>花火情報検索システム</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            margin-right: 5px;
+            border-radius: 4px 4px 0 0;
+        }
+        .tab.active {
+            background-color: #fff;
+            border-color: #ddd;
+            border-bottom-color: #fff;
+            margin-bottom: -1px;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .response {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .loading {
+            display: none;
+            margin-top: 10px;
+            color: #666;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+        .keywords {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #e8f5e9;
+            border-radius: 4px;
+        }
+        .keyword {
+            display: inline-block;
+            background-color: #4CAF50;
+            color: white;
+            padding: 5px 10px;
+            margin: 3px;
+            border-radius: 15px;
+            font-size: 0.9em;
+        }
+        .relevant-docs {
+            margin-top: 15px;
+        }
+        .doc-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        .doc-source {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+        .doc-score {
+            color: #4CAF50;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>花火情報検索システム</h1>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('question')">質問</div>
+            <div class="tab" onclick="switchTab('search')">検索</div>
+        </div>
+        
+        <div id="question" class="tab-content active">
+            <textarea id="questionInput" rows="4" placeholder="花火について質問してください..."></textarea>
+            <button onclick="submitQuestion()">質問を送信</button>
+            <div id="questionLoading" class="loading">処理中...</div>
+            <div id="questionError" class="error"></div>
+            <div id="questionResponse" class="response"></div>
+            <div id="questionKeywords" class="keywords"></div>
+            <div id="questionRelevantDocs" class="relevant-docs"></div>
+        </div>
+        
+        <div id="search" class="tab-content">
+            <input type="text" id="searchInput" placeholder="検索キーワードを入力...">
+            <input type="number" id="resultCount" min="1" max="10" value="3" style="width: 60px;">
+            <button onclick="searchDocuments()">検索</button>
+            <div id="searchLoading" class="loading">検索中...</div>
+            <div id="searchError" class="error"></div>
+            <div id="searchResults" class="response"></div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tabId) {
+            // タブの切り替え
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            document.querySelector(`.tab[onclick="switchTab('${tabId}')"]`).classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        function submitQuestion() {
+            const questionInput = document.getElementById('questionInput');
+            const loading = document.getElementById('questionLoading');
+            const error = document.getElementById('questionError');
+            const response = document.getElementById('questionResponse');
+            const keywords = document.getElementById('questionKeywords');
+            const relevantDocs = document.getElementById('questionRelevantDocs');
+            
+            if (!questionInput.value.trim()) {
+                error.textContent = '質問を入力してください。';
+                return;
+            }
+            
+            loading.style.display = 'block';
+            error.textContent = '';
+            response.textContent = '';
+            keywords.textContent = '';
+            relevantDocs.textContent = '';
+            
+            fetch('/query', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    query: questionInput.value
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                loading.style.display = 'none';
+                if (data.error) {
+                    error.textContent = data.error;
+                } else {
+                    response.textContent = data.response;
+                    
+                    // キーワードの表示
+                    if (data.keywords && data.keywords.length > 0) {
+                        keywords.innerHTML = '<h3>抽出されたキーワード:</h3>';
+                        data.keywords.forEach(keyword => {
+                            keywords.innerHTML += `<span class="keyword">${keyword}</span>`;
+                        });
+                    }
+                    
+                    // 関連ドキュメントの表示
+                    if (data.relevant_docs && data.relevant_docs.length > 0) {
+                        relevantDocs.innerHTML = '<h3>関連情報:</h3>';
+                        data.relevant_docs.forEach(doc => {
+                            relevantDocs.innerHTML += `
+                                <div class="doc-item">
+                                    <div class="doc-source">出典: ${doc.metadata.source}</div>
+                                    <div class="doc-score">関連度: ${(doc.score * 100).toFixed(2)}%</div>
+                                    <div class="doc-content">${doc.content}</div>
+                                </div>
+                            `;
+                        });
+                    }
+                }
+            })
+            .catch(error => {
+                loading.style.display = 'none';
+                error.textContent = 'エラーが発生しました。';
+            });
+        }
+
+        function searchDocuments() {
+            const searchInput = document.getElementById('searchInput');
+            const resultCount = document.getElementById('resultCount');
+            const loading = document.getElementById('searchLoading');
+            const error = document.getElementById('searchError');
+            const results = document.getElementById('searchResults');
+            
+            if (!searchInput.value.trim()) {
+                error.textContent = '検索キーワードを入力してください。';
+                return;
+            }
+            
+            loading.style.display = 'block';
+            error.textContent = '';
+            results.textContent = '';
+            
+            fetch('/search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    query: searchInput.value,
+                    count: parseInt(resultCount.value)
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                loading.style.display = 'none';
+                if (data.error) {
+                    error.textContent = data.error;
+                } else {
+                    results.innerHTML = '<h3>検索結果:</h3>';
+                    data.results.forEach(result => {
+                        results.innerHTML += `
+                            <div class="doc-item">
+                                <div class="doc-source">出典: ${result.source}</div>
+                                <div class="doc-score">関連度: ${result.score}</div>
+                                <div class="doc-content">${result.content}</div>
+                            </div>
+                        `;
+                    });
+                }
+            })
+            .catch(error => {
+                loading.style.display = 'none';
+                error.textContent = 'エラーが発生しました。';
+            });
+        }
+    </script>
+</body>
+</html> 
